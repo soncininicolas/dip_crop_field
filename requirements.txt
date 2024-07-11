@@ -1,0 +1,6 @@
+opencv-python>=4.9.0
+numpy>=1.24.4
+scikit-learn>=1.3.2
+matplotlib>=3.7.5
+pandas>=2.0.3
+notebook>=7.2.0
