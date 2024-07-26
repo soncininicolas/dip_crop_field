@@ -66,6 +66,23 @@ def skeleton(image, kernel):
             done = True
     return skel
 
+def intersection(line1, line2):
+    """Finds the intersection of two lines given in Hesse normal form.
+
+    Returns closest integer pixel locations.
+    See https://stackoverflow.com/a/383527/5087436
+    """
+    rho1, theta1 = line1[0]
+    rho2, theta2 = line2[0]
+    A = np.array([
+        [np.cos(theta1), np.sin(theta1)],
+        [np.cos(theta2), np.sin(theta2)]
+    ])
+    b = np.array([[rho1], [rho2]])
+    x0, y0 = np.linalg.solve(A, b)
+    x0, y0 = int(np.round(x0)), int(np.round(y0))
+    return [[x0, y0]]
+
 if __name__ == "__main__":
     # Parse command line arguments
     # TODO complete description
@@ -75,13 +92,19 @@ if __name__ == "__main__":
     
     image = read_image(args.image_path)
     exg = ExG(image)
-    ret, otsu = cv2.threshold(exg, 10, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    window_name = "ExG"
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.imshow(window_name, exg)
+    cv2.waitKey(0)
+
+
+    ret, otsu = cv2.threshold(exg, 75, 255, cv2.THRESH_BINARY)
     window_name = "ExG + Otsu"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.imshow(window_name, otsu)
     cv2.waitKey(0)
 
-    skel = skeleton(otsu, (5,5))
+    skel = skeleton(otsu, (9,9))
     window_name = "Skeleton"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.imshow(window_name, skel)
@@ -101,7 +124,13 @@ if __name__ == "__main__":
     # cdst = cv2.cvtColor(skel, cv2.COLOR_GRAY2BGR)
     cdst = np.copy(image)
     
+    # TODO this value should be defined in function of w and h
     c = 2000
+    num_lines = 0
+    slope_thresh = 0.8
+    slope_max = 1.0
+    step = 0.05
+    candidates = {}
     if lines is not None:
         for i in range(0, len(lines)):
             rho = lines[i][0][0]
@@ -110,11 +139,32 @@ if __name__ == "__main__":
             b = math.sin(theta)
             x0 = a * rho
             y0 = b * rho
-            pt1 = (int(x0 + c*(-b)), int(y0 + c*(a)))
-            pt2 = (int(x0 - c*(-b)), int(y0 - c*(a)))
-            cv2.line(cdst, pt1, pt2, (0,0,255), 3, cv2.LINE_AA)
+            # print(f"{a} {b} {a/b}")
+            if abs(a) > slope_thresh:
+                print(a)
+                # candidates.append(lines[i])
+                category = int(np.sign(a) * (abs(a) - slope_thresh) // step)
+                print(category)
+                if not (category in candidates):
+                    candidates[category] = [lines[i]]
+                else:
+                    candidates[category].append(lines[i])
 
+                num_lines += 1
+                # pt1 = (int(x0 + c*(-b)), int(y0 + c*(a)))
+                # pt2 = (int(x0 - c*(-b)), int(y0 - c*(a)))
+                # cv2.line(cdst, pt1, pt2, (0,0,255), 3, cv2.LINE_AA)
+    print(candidates)
+    categories = list(candidates.keys())
+    line_intersections = []
+    for i in range(len(categories) - 1):
+        for j in range(1,len(categories)-i):
+            for k in candidates[categories[i+j]]:
+                for l in candidates[categories[i]]:
+                    line_intersections.append(intersection(l,k))
     
+    # TODO apply k-means to line_intersections
+
     window_name = "Hough"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.imshow(window_name, cdst)
