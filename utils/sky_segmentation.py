@@ -95,18 +95,20 @@ def horizon_cluster(clusters: cv2.Mat) -> Tuple[List[int], cv2.Mat]:
     return rvals, jlabels
 
 
-def KMeansSky(image: cv2.Mat) -> cv2.Mat:
+def KMeansSky(image: cv2.Mat, **kwargs) -> cv2.Mat:
     """
     Takes an image in BGR format and returns a mask that represents
     the pixels that belong to the sky. Assumes that there's sky
     present in the image, that its positioned at the top of the image
     and that it spans the full image width.
     """
-    imblur = cv2.GaussianBlur(image, ksize=(25,25), sigmaX=0)
+    ksize = kwargs['ksize'] if 'ksize' in kwargs else (25,25)
+    sigmaX = kwargs['sigmaX'] if 'sigmaX' in kwargs else 0
+    imblur = cv2.GaussianBlur(image, ksize=ksize, sigmaX=sigmaX)
     imkmean = imblur.reshape((-1, 3))
     imkmean = np.float32(imkmean)
     # perform kmeans clustering
-    k = 5
+    k = kwargs['k'] if 'k' in kwargs else 5
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.1)
     flags = cv2.KMEANS_RANDOM_CENTERS
     compactness, labels, centers = cv2.kmeans(imkmean, k, None, criteria, 10, flags)
@@ -119,16 +121,19 @@ def KMeansSky(image: cv2.Mat) -> cv2.Mat:
     return hcintens
 
 
-def IntensitySky(image: cv2.Mat) -> cv2.Mat:
+def IntensitySky(image: cv2.Mat, **kwargs) -> cv2.Mat:
     """
     Takes an image in BGR format and returns a mask that represents
     the pixels that belong to the sky. Assumes that there's sky
     present in the image, that its positioned at the top of the image
     and that it spans the full image width.
     """
-    imblur = cv2.GaussianBlur(image, ksize=(25,25), sigmaX=0)
+    ksize = kwargs['ksize'] if 'ksize' in kwargs else (25,25)
+    sigmaX = kwargs['sigmaX'] if 'sigmaX' in kwargs else 0
+    imblur = cv2.GaussianBlur(image, ksize=ksize, sigmaX=sigmaX)
     imintens = cv2.cvtColor(imblur, cv2.COLOR_BGR2GRAY)
-    k = 5
+    # perform quantization
+    k = kwargs['k'] if 'k' in kwargs else 5
     q = 255 // k
     imquant = (imintens // q)
     cgrval, cglab, cgstats, _ = connectedGrayscaleComponentsWithStats(imquant)
