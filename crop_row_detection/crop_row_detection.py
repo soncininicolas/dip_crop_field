@@ -203,28 +203,58 @@ if __name__ == "__main__":
     cv2.waitKey(0)
 
 
-    ret, otsu = cv2.threshold(exg, 75, 255, cv2.THRESH_BINARY)
+    ret, otsu = cv2.threshold(exg, 75, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
     window_name = "ExG + Otsu"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.imshow(window_name, otsu)
     cv2.waitKey(0)
 
-    skel = skeleton(otsu, (9,9))
+    # skel = skeleton(otsu, (7,7))
+    # window_name = "Skeleton"
+    # cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    # cv2.imshow(window_name, skel)
+    # cv2.waitKey(0)
+
+    kernel = np.ones((7,7),np.uint8)
+    closing = cv2.morphologyEx(otsu, cv2.MORPH_CLOSE, kernel)
+    window_name = "Closing"
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.imshow(window_name, closing)
+    cv2.waitKey(0)
+
+    skel = skeleton(closing, (9,9))
     window_name = "Skeleton"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.imshow(window_name, skel)
     cv2.waitKey(0)
 
-    # kernel = np.ones((3,3),np.uint8)
-    # opening = cv2.morphologyEx(skel, cv2.MORPH_OPEN, kernel)
-    # window_name = "Opening"
-    # cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    # cv2.imshow(window_name, opening)
-    # cv2.waitKey(0)
+    kernel = np.ones((3,3),np.uint8)
+    dilate = cv2.dilate(skel, kernel)#cv2.morphologyEx(skel, cv2.MORPH_OPEN, kernel)
+    window_name = "Dilation"
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.imshow(window_name, dilate)
+    cv2.waitKey(0)
 
-    lines = cv2.HoughLines(skel, 1, np.pi / 180, 150, None, 0, 0)
-    
-    
+    lines = cv2.HoughLines(dilate, 1, np.pi / 180, 195, None, 0, 0) #FIXME threshold == 350 for zavalla2022
+    # print(lines.shape)
+    # if lines is not None:
+    #     dst = np.copy(image)
+    #     for i in range(0, len(lines)):
+    #         rho = lines[i][0][0]
+    #         theta = lines[i][0][1]
+    #         a = math.cos(theta)
+    #         b = math.sin(theta)
+    #         x0 = a * rho
+    #         y0 = b * rho
+    #         pt1 = (int(x0 + 1000*(-b)), int(y0 + 1000*(a)))
+    #         pt2 = (int(x0 - 1000*(-b)), int(y0 - 1000*(a)))
+    #         cv2.line(dst, pt1, pt2, (0,0,255), 3, cv2.LINE_AA)
+    #     window_name = "All lines"
+    #     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    #     cv2.imshow(window_name, dst)
+    #     cv2.waitKey(0)
+
+
     # Copy edges to the images that will display the results in BGR
     # cdst = cv2.cvtColor(skel, cv2.COLOR_GRAY2BGR)
     cdst = np.copy(image)
@@ -234,7 +264,7 @@ if __name__ == "__main__":
     num_lines = 0
     slope_thresh = 0.8
     slope_max = 1.00000001
-    step = 0.1
+    step = 0.10
     candidates = {}
     half_num_cats = int((slope_max - slope_thresh) // step)
     num_cats = half_num_cats * 2
@@ -265,6 +295,10 @@ if __name__ == "__main__":
                 color = tuple(cv2.applyColorMap(np.uint8([[int(255 * (category + half_num_cats) / num_cats)]]), cv2.COLORMAP_JET).flatten().tolist())
                 pt1, pt2 = points_from_line(rho, theta)
                 cv2.line(cdst, pt1, pt2, color, 3, cv2.LINE_AA)
+        window_name = "Filtered lines (by slope)"
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.imshow(window_name, cdst)
+        cv2.waitKey(0)
 
     # Intersection of all lines, except those from the same category
     categories = list(candidates.keys())
@@ -313,18 +347,18 @@ if __name__ == "__main__":
         cv2.line(img_2, pt1, pt2, (0,255,0), 3, cv2.LINE_AA)
 
 
-    window_name = "Hough"
+    window_name = "Lines after clustering intersections"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.imshow(window_name, img_2)
     cv2.waitKey(0)
 
-    # Plot all lines and non-outlier intersections
-    plt.imshow(cdst)
-    plt.scatter(np.array(non_outlier_data)[:, 0], np.array(non_outlier_data)[:, 1], c=non_outlier_labels, cmap='viridis', s=20)
-    plt.title("Non-Outlier Clusters")
-    plt.xlabel("X-coordinate")
-    plt.ylabel("Y-coordinate")
-    plt.show()
+    # Plot lines and non-outlier intersections
+    # plt.imshow(cdst)
+    # plt.scatter(np.array(non_outlier_data)[:, 0], np.array(non_outlier_data)[:, 1], c=non_outlier_labels, cmap='viridis', s=20)
+    # plt.title("Non-Outlier Clusters")
+    # plt.xlabel("X-coordinate")
+    # plt.ylabel("Y-coordinate")
+    # plt.show()
 
 
 
