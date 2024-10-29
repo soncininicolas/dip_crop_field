@@ -11,9 +11,24 @@ import matplotlib.pyplot as plt
 from dataclasses import dataclass
 
 @dataclass
+class Line:
+  line: np.ndarray
+  category: int
+
+  @property
+  def rho(self):
+    r, _ = self.line[0]
+    return r
+  
+  @property
+  def theta(self):
+    _, t = self.line[0]
+    return t
+
+@dataclass
 class TwoLines:
-    line1: np.ndarray
-    line2: np.ndarray
+    line1: Line
+    line2: Line
 
     @property
     def intersection(self):
@@ -22,8 +37,8 @@ class TwoLines:
         Returns closest integer pixel locations.
         See https://stackoverflow.com/a/383527/5087436
         """
-        rho1, theta1 = self.line1[0]
-        rho2, theta2 = self.line2[0]
+        rho1, theta1 = self.line1.rho, self.line1.theta
+        rho2, theta2 = self.line2.rho, self.line2.theta
         A = np.array([
             [np.cos(theta1), np.sin(theta1)],
             [np.cos(theta2), np.sin(theta2)]
@@ -35,7 +50,7 @@ class TwoLines:
 
 
 def apply_dbscan(data, eps=5, min_samples=2):
-  """Detects outliers in a list of 2D points using DBSCAN.
+  """Clustering and outlier detection in a list of 2D points using DBSCAN.
 
   Args:
     data: A list of (N, 1, 2) elements representing 2D points.
@@ -144,7 +159,7 @@ def skeleton(image, kernel):
             done = True
     return skel
 
-def points_from_line(rho, theta):
+def points_from_line(rho, theta, c):
     a = math.cos(theta)
     b = math.sin(theta)
     x0 = a * rho
@@ -262,9 +277,9 @@ if __name__ == "__main__":
     # TODO this value should be defined in function of w and h
     c = 2000
     num_lines = 0
-    slope_thresh = 0.8
+    slope_thresh = 0.75
     slope_max = 1.00000001
-    step = 0.10
+    step = 0.1
     candidates = {}
     half_num_cats = int((slope_max - slope_thresh) // step)
     num_cats = half_num_cats * 2
@@ -283,17 +298,17 @@ if __name__ == "__main__":
                 
                 # Discretize the space according to the slope
                 category = category_from_line(theta, slope_thresh, step) #int(np.sign(a) * (abs(a) - slope_thresh) // step)
-                
+                line_ = Line(lines[i], category)
                 if not (category in candidates):
-                    candidates[category] = [lines[i]]
+                    candidates[category] = [line_]
                 else:
-                    candidates[category].append(lines[i])
+                    candidates[category].append(line_)
 
                 num_lines += 1          
 
                 # Plot each category with a different color      
                 color = tuple(cv2.applyColorMap(np.uint8([[int(255 * (category + half_num_cats) / num_cats)]]), cv2.COLORMAP_JET).flatten().tolist())
-                pt1, pt2 = points_from_line(rho, theta)
+                pt1, pt2 = points_from_line(rho, theta, c)
                 cv2.line(cdst, pt1, pt2, color, 3, cv2.LINE_AA)
         window_name = "Filtered lines (by slope)"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -303,11 +318,17 @@ if __name__ == "__main__":
     # Intersection of all lines, except those from the same category
     categories = list(candidates.keys())
     pair_of_lines = []
+    skyline_min = 0
+    skyline_max = 150
     for i in range(len(categories) - 1):
         for j in range(1,len(categories)-i):
             for k in candidates[categories[i+j]]:
                 for l in candidates[categories[i]]:
-                    pair_of_lines.append(TwoLines(l,k))
+                    line = TwoLines(l,k)
+                    # print(line.intersection[0][1])
+                    y_intersection = line.intersection[0][1]
+                    if y_intersection > skyline_min and y_intersection < skyline_max:
+                      pair_of_lines.append(TwoLines(l,k))
     
     pair_of_lines = np.array(pair_of_lines)
     
@@ -335,30 +356,36 @@ if __name__ == "__main__":
     indices = np.where(labels == most_frequent_label) 
     img_2 = np.copy(image)
     # print(pair_of_lines[indices])
-    
+    already_used_categories = []
     for p in pair_of_lines[indices]:
-        theta1 = p.line1[0][1]
-        theta2 = p.line2[0][1]
-        # print(category_from_line(theta1, slope_thresh, step))
-        # print(category_from_line(theta2, slope_thresh, step))
-        pt1, pt2 = points_from_line(p.line1[0][0], p.line1[0][1])
-        cv2.line(img_2, pt1, pt2, (0,255,0), 3, cv2.LINE_AA)
-        pt1, pt2 = points_from_line(p.line2[0][0], p.line2[0][1])
-        cv2.line(img_2, pt1, pt2, (0,255,0), 3, cv2.LINE_AA)
+        # theta1 = p.line1[0][1]
+        # theta2 = p.line2[0][1]
+        cat_1 = p.line1.category#category_from_line(theta1, slope_thresh, step)
+        cat_2 = p.line2.category#category_from_line(theta2, slope_thresh, step)
+        if cat_1 in already_used_categories and cat_2 in already_used_categories:
+            continue
+        if cat_1 not in already_used_categories:
+          already_used_categories.append(cat_1)    
+          pt1, pt2 = points_from_line(p.line1.rho, p.line1.theta, c)
+          cv2.line(img_2, pt1, pt2, (0,255,0), 3, cv2.LINE_AA)
+        if cat_2 not in already_used_categories:
+          already_used_categories.append(cat_2)    
+          pt1, pt2 = points_from_line(p.line2.rho, p.line2.theta, c)
+          cv2.line(img_2, pt1, pt2, (0,255,0), 3, cv2.LINE_AA)
 
-
+    print(already_used_categories)
     window_name = "Lines after clustering intersections"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.imshow(window_name, img_2)
     cv2.waitKey(0)
 
     # Plot lines and non-outlier intersections
-    # plt.imshow(cdst)
-    # plt.scatter(np.array(non_outlier_data)[:, 0], np.array(non_outlier_data)[:, 1], c=non_outlier_labels, cmap='viridis', s=20)
-    # plt.title("Non-Outlier Clusters")
-    # plt.xlabel("X-coordinate")
-    # plt.ylabel("Y-coordinate")
-    # plt.show()
+    plt.imshow(cdst)
+    plt.scatter(np.array(non_outlier_data)[:, 0], np.array(non_outlier_data)[:, 1], c=non_outlier_labels, cmap='viridis', s=20)
+    plt.title("Non-Outlier Clusters")
+    plt.xlabel("X-coordinate")
+    plt.ylabel("Y-coordinate")
+    plt.show()
 
 
 
