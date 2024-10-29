@@ -3,6 +3,7 @@ import cv2
 import sys
 import numpy as np
 import math
+import yaml
 from sklearn.cluster import KMeans
 import numpy as np
 from sklearn.cluster import DBSCAN
@@ -110,7 +111,6 @@ def read_image(image_path):
     return image
 
 def ExGR(image: cv2.Mat) -> cv2.Mat:
-    print("Index: ExGR")
     image = image.astype('float') / 255
     B, G, R = cv2.split(image)
     N = (R + B + G) + np.ones_like(R).astype('float') * 0.00001
@@ -127,7 +127,6 @@ def ExG(image: cv2.Mat) -> cv2.Mat:
     index applied to the image in the form of a grayscale image
     in the [0, 1] range.
     """
-    print("Index: ExG")
     image = image.astype('float') / 255
     B, G, R = cv2.split(image)
     N = (R + B + G) + np.ones_like(R).astype('float') * 0.00001
@@ -168,9 +167,9 @@ def points_from_line(rho, theta, c):
     pt2 = (int(x0 - c*(-b)), int(y0 - c*(a)))
     return pt1, pt2
 
-def category_from_line(theta, slope_thresh, step):
+def category_from_line(theta, slope_thresh, slope_step):
     a = math.cos(theta)
-    return int(np.sign(a) * (abs(a) - slope_thresh) // step)
+    return int(np.sign(a) * (abs(a) - slope_thresh) // slope_step)
 
 def choose_cluster_with_lower_dispersion(data, labels):
   """Chooses the cluster with the lowest dispersion.
@@ -202,86 +201,101 @@ def choose_cluster_with_lower_dispersion(data, labels):
 
 #   return np.argmin(variances)
 
+DEFAULT_CONFIG = {
+   'c': 2000,
+   'skyline_min': 0,
+   'skyline_max': 150,
+   'hough_lines_thresh': 195,
+   'slope_thresh': 0.75,
+   'slope_step': 0.10,
+   'slope_max': 1.000001
+}
+
+def read_config(config_file):
+    
+    if config_file is None:
+        print("No configuration file provided. Using default values.")
+        return DEFAULT_CONFIG
+    
+    try:
+        with open(config_file, 'r') as file:
+            config = yaml.safe_load(file)
+    except FileNotFoundError:
+        print(f"Configuration file {config_file} not found. Using default values.")
+        return DEFAULT_CONFIG
+
+    # Merging defaults with loaded config
+    merged_config = {**DEFAULT_CONFIG, **config}  # Override defaults with loaded config
+    return merged_config
+
 
 if __name__ == "__main__":
     # Parse command line arguments
     # TODO complete description
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("image_path", type=str, help="Path to the image file.")
+    parser.add_argument('--config', type=str, help='Path to the configuration file')
+    parser.add_argument('--debug', action='store_true', help='Debug flag.')
     args = parser.parse_args()
+    config_values = read_config(args.config)
+
+    c = config_values['c']
+    skyline_min = config_values['skyline_min']
+    skyline_max = config_values['skyline_max']
+    hough_lines_thresh = config_values['hough_lines_thresh']
+    slope_thresh = config_values['slope_thresh']
+    slope_step = config_values['slope_step']
+    slope_max = config_values['slope_max']
+    print(config_values)
     
     image = read_image(args.image_path)
     exg = ExG(image)
-    window_name = "ExG"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.imshow(window_name, exg)
-    cv2.waitKey(0)
+    if args.debug:
+      window_name = "ExG"
+      cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+      cv2.imshow(window_name, exg)
+      cv2.waitKey(0)
 
 
     ret, otsu = cv2.threshold(exg, 75, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-    window_name = "ExG + Otsu"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.imshow(window_name, otsu)
-    cv2.waitKey(0)
-
-    # skel = skeleton(otsu, (7,7))
-    # window_name = "Skeleton"
-    # cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    # cv2.imshow(window_name, skel)
-    # cv2.waitKey(0)
+    if args.debug:
+      window_name = "ExG + Otsu"
+      cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+      cv2.imshow(window_name, otsu)
+      cv2.waitKey(0)
 
     kernel = np.ones((7,7),np.uint8)
     closing = cv2.morphologyEx(otsu, cv2.MORPH_CLOSE, kernel)
-    window_name = "Closing"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.imshow(window_name, closing)
-    cv2.waitKey(0)
+    if args.debug:
+      window_name = "Closing"
+      cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+      cv2.imshow(window_name, closing)
+      cv2.waitKey(0)
 
     skel = skeleton(closing, (9,9))
-    window_name = "Skeleton"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.imshow(window_name, skel)
-    cv2.waitKey(0)
+    if args.debug:
+      window_name = "Skeleton"
+      cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+      cv2.imshow(window_name, skel)
+      cv2.waitKey(0)
 
     kernel = np.ones((3,3),np.uint8)
-    dilate = cv2.dilate(skel, kernel)#cv2.morphologyEx(skel, cv2.MORPH_OPEN, kernel)
-    window_name = "Dilation"
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.imshow(window_name, dilate)
-    cv2.waitKey(0)
+    dilate = cv2.dilate(skel, kernel)
+    if args.debug:
+      window_name = "Dilation"
+      cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+      cv2.imshow(window_name, dilate)
+      cv2.waitKey(0)
 
-    lines = cv2.HoughLines(dilate, 1, np.pi / 180, 195, None, 0, 0) #FIXME threshold == 350 for zavalla2022
-    # print(lines.shape)
-    # if lines is not None:
-    #     dst = np.copy(image)
-    #     for i in range(0, len(lines)):
-    #         rho = lines[i][0][0]
-    #         theta = lines[i][0][1]
-    #         a = math.cos(theta)
-    #         b = math.sin(theta)
-    #         x0 = a * rho
-    #         y0 = b * rho
-    #         pt1 = (int(x0 + 1000*(-b)), int(y0 + 1000*(a)))
-    #         pt2 = (int(x0 - 1000*(-b)), int(y0 - 1000*(a)))
-    #         cv2.line(dst, pt1, pt2, (0,0,255), 3, cv2.LINE_AA)
-    #     window_name = "All lines"
-    #     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    #     cv2.imshow(window_name, dst)
-    #     cv2.waitKey(0)
-
+    lines = cv2.HoughLines(dilate, 1, np.pi / 180, hough_lines_thresh, None, 0, 0)
 
     # Copy edges to the images that will display the results in BGR
     # cdst = cv2.cvtColor(skel, cv2.COLOR_GRAY2BGR)
     cdst = np.copy(image)
     
-    # TODO this value should be defined in function of w and h
-    c = 2000
     num_lines = 0
-    slope_thresh = 0.75
-    slope_max = 1.00000001
-    step = 0.1
     candidates = {}
-    half_num_cats = int((slope_max - slope_thresh) // step)
+    half_num_cats = int((slope_max - slope_thresh) // slope_step)
     num_cats = half_num_cats * 2
     if lines is not None:
         for i in range(0, len(lines)):
@@ -297,7 +311,7 @@ if __name__ == "__main__":
             if abs(a) > slope_thresh:
                 
                 # Discretize the space according to the slope
-                category = category_from_line(theta, slope_thresh, step) #int(np.sign(a) * (abs(a) - slope_thresh) // step)
+                category = category_from_line(theta, slope_thresh, slope_step) 
                 line_ = Line(lines[i], category)
                 if not (category in candidates):
                     candidates[category] = [line_]
@@ -310,22 +324,20 @@ if __name__ == "__main__":
                 color = tuple(cv2.applyColorMap(np.uint8([[int(255 * (category + half_num_cats) / num_cats)]]), cv2.COLORMAP_JET).flatten().tolist())
                 pt1, pt2 = points_from_line(rho, theta, c)
                 cv2.line(cdst, pt1, pt2, color, 3, cv2.LINE_AA)
-        window_name = "Filtered lines (by slope)"
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        cv2.imshow(window_name, cdst)
-        cv2.waitKey(0)
+        if args.debug:
+          window_name = "Filtered lines (by slope)"
+          cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+          cv2.imshow(window_name, cdst)
+          cv2.waitKey(0)
 
     # Intersection of all lines, except those from the same category
     categories = list(candidates.keys())
     pair_of_lines = []
-    skyline_min = 0
-    skyline_max = 150
     for i in range(len(categories) - 1):
         for j in range(1,len(categories)-i):
             for k in candidates[categories[i+j]]:
                 for l in candidates[categories[i]]:
                     line = TwoLines(l,k)
-                    # print(line.intersection[0][1])
                     y_intersection = line.intersection[0][1]
                     if y_intersection > skyline_min and y_intersection < skyline_max:
                       pair_of_lines.append(TwoLines(l,k))
@@ -338,16 +350,15 @@ if __name__ == "__main__":
     # Apply DBSCAN to find clusters of intersections and potential outliers
     labels = apply_dbscan(line_intersections)
     
-    print(labels)
     non_negative_values, counts = np.unique(labels[labels >= 0], return_counts=True)
     most_frequent_index = np.argmax(counts)
     most_frequent_label = non_negative_values[most_frequent_index]
     
     # Filter out outliers 
-    non_outlier_indices = np.where(labels != -1)[0]
-    flattened_data = [point[0] for point in line_intersections]
-    non_outlier_data = [flattened_data[i] for i in non_outlier_indices]
-    non_outlier_labels = labels[non_outlier_indices]
+    # non_outlier_indices = np.where(labels != -1)[0]
+    # flattened_data = [point[0] for point in line_intersections]
+    # non_outlier_data = [flattened_data[i] for i in non_outlier_indices]
+    # non_outlier_labels = labels[non_outlier_indices]
     # cluster_lower_dispersion = choose_cluster_with_lower_dispersion(non_outlier_data, non_outlier_labels)
     # print(f"low disp {cluster_lower_dispersion}")
 
@@ -355,13 +366,11 @@ if __name__ == "__main__":
     # Is this the best method to choose the vanishing point?
     indices = np.where(labels == most_frequent_label) 
     img_2 = np.copy(image)
-    # print(pair_of_lines[indices])
+
     already_used_categories = []
     for p in pair_of_lines[indices]:
-        # theta1 = p.line1[0][1]
-        # theta2 = p.line2[0][1]
-        cat_1 = p.line1.category#category_from_line(theta1, slope_thresh, step)
-        cat_2 = p.line2.category#category_from_line(theta2, slope_thresh, step)
+        cat_1 = p.line1.category
+        cat_2 = p.line2.category
         if cat_1 in already_used_categories and cat_2 in already_used_categories:
             continue
         if cat_1 not in already_used_categories:
@@ -373,19 +382,18 @@ if __name__ == "__main__":
           pt1, pt2 = points_from_line(p.line2.rho, p.line2.theta, c)
           cv2.line(img_2, pt1, pt2, (0,255,0), 3, cv2.LINE_AA)
 
-    print(already_used_categories)
     window_name = "Lines after clustering intersections"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.imshow(window_name, img_2)
     cv2.waitKey(0)
 
     # Plot lines and non-outlier intersections
-    plt.imshow(cdst)
-    plt.scatter(np.array(non_outlier_data)[:, 0], np.array(non_outlier_data)[:, 1], c=non_outlier_labels, cmap='viridis', s=20)
-    plt.title("Non-Outlier Clusters")
-    plt.xlabel("X-coordinate")
-    plt.ylabel("Y-coordinate")
-    plt.show()
+    # plt.imshow(cdst)
+    # plt.scatter(np.array(non_outlier_data)[:, 0], np.array(non_outlier_data)[:, 1], c=non_outlier_labels, cmap='viridis', s=20)
+    # plt.title("Non-Outlier Clusters")
+    # plt.xlabel("X-coordinate")
+    # plt.ylabel("Y-coordinate")
+    # plt.show()
 
 
 
