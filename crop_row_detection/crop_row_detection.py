@@ -158,13 +158,13 @@ def skeleton(image, kernel):
             done = True
     return skel
 
-def points_from_line(rho, theta, c):
+def points_from_line(rho, theta, scaling_factor):
     a = math.cos(theta)
     b = math.sin(theta)
     x0 = a * rho
     y0 = b * rho
-    pt1 = (int(x0 + c*(-b)), int(y0 + c*(a)))
-    pt2 = (int(x0 - c*(-b)), int(y0 - c*(a)))
+    pt1 = (int(x0 + scaling_factor*(-b)), int(y0 + scaling_factor*(a)))
+    pt2 = (int(x0 - scaling_factor*(-b)), int(y0 - scaling_factor*(a)))
     return pt1, pt2
 
 def category_from_line(theta, slope_thresh, slope_step):
@@ -202,7 +202,7 @@ def choose_cluster_with_lower_dispersion(data, labels):
 #   return np.argmin(variances)
 
 DEFAULT_CONFIG = {
-   'c': 2000,
+   'scaling_factor': 2000,
    'skyline_min': 0,
    'skyline_max': 150,
    'hough_lines_thresh': 195,
@@ -239,7 +239,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config_values = read_config(args.config)
 
-    c = config_values['c']
+    scaling_factor = config_values['scaling_factor']
     skyline_min = config_values['skyline_min']
     skyline_max = config_values['skyline_max']
     hough_lines_thresh = config_values['hough_lines_thresh']
@@ -322,7 +322,7 @@ if __name__ == "__main__":
 
                 # Plot each category with a different color      
                 color = tuple(cv2.applyColorMap(np.uint8([[int(255 * (category + half_num_cats) / num_cats)]]), cv2.COLORMAP_JET).flatten().tolist())
-                pt1, pt2 = points_from_line(rho, theta, c)
+                pt1, pt2 = points_from_line(rho, theta, scaling_factor)
                 cv2.line(cdst, pt1, pt2, color, 3, cv2.LINE_AA)
         if args.debug:
           window_name = "Filtered lines (by slope)"
@@ -375,11 +375,11 @@ if __name__ == "__main__":
             continue
         if cat_1 not in already_used_categories:
           already_used_categories.append(cat_1)    
-          pt1, pt2 = points_from_line(p.line1.rho, p.line1.theta, c)
+          pt1, pt2 = points_from_line(p.line1.rho, p.line1.theta, scaling_factor)
           cv2.line(img_2, pt1, pt2, (0,255,0), 3, cv2.LINE_AA)
         if cat_2 not in already_used_categories:
           already_used_categories.append(cat_2)    
-          pt1, pt2 = points_from_line(p.line2.rho, p.line2.theta, c)
+          pt1, pt2 = points_from_line(p.line2.rho, p.line2.theta, scaling_factor)
           cv2.line(img_2, pt1, pt2, (0,255,0), 3, cv2.LINE_AA)
 
     window_name = "Lines after clustering intersections"
