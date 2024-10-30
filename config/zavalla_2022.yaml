@@ -1,0 +1,10 @@
+scaling_factor: 2000
+
+#skyline_min: 0
+#skyline_max: 150
+
+hough_lines_thresh: 350
+slope_thresh: 0.3
+slope_step: 0.06
+
+#slope_max: 1.000001
