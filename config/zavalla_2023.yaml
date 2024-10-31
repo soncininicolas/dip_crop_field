@@ -7,4 +7,3 @@ hough_lines_thresh: 195
 slope_thresh: 0.8
 slope_step: 0.1
 
-#slope_max: 1.000001

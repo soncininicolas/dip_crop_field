@@ -207,8 +207,7 @@ DEFAULT_CONFIG = {
    'skyline_max': 150,
    'hough_lines_thresh': 195,
    'slope_thresh': 0.75,
-   'slope_step': 0.10,
-   'slope_max': 1.000001
+   'slope_step': 0.10
 }
 
 def read_config(config_file):
@@ -245,7 +244,6 @@ if __name__ == "__main__":
     hough_lines_thresh = config_values['hough_lines_thresh']
     slope_thresh = config_values['slope_thresh']
     slope_step = config_values['slope_step']
-    slope_max = config_values['slope_max']
     print(config_values)
     
     image = read_image(args.image_path)
@@ -294,9 +292,15 @@ if __name__ == "__main__":
     cdst = np.copy(image)
     
     num_lines = 0
+    
+    # Generate bin edges from -1 to 1 using the given step size
+    # Add small tolerance to include 1 itself
+    start, end = -1, 1+slope_step
+    bins = np.arange(start, end, slope_step)
+    num_bins = int((end - start) / slope_step)
+    
     candidates = {}
-    half_num_cats = int((slope_max - slope_thresh) // slope_step)
-    num_cats = half_num_cats * 2
+
     if lines is not None:
         for i in range(0, len(lines)):
             # Line representation -> rho, theta
@@ -309,9 +313,9 @@ if __name__ == "__main__":
             
             # Filter lines using slope_thresh
             if abs(a) > slope_thresh:
-                
-                # Discretize the space according to the slope
-                category = category_from_line(theta, slope_thresh, slope_step) 
+                # Get the category according to the bins
+                category = np.digitize(a, bins)              
+
                 line_ = Line(lines[i], category)
                 if not (category in candidates):
                     candidates[category] = [line_]
@@ -320,10 +324,13 @@ if __name__ == "__main__":
 
                 num_lines += 1          
 
-                # Plot each category with a different color      
-                color = tuple(cv2.applyColorMap(np.uint8([[int(255 * (category + half_num_cats) / num_cats)]]), cv2.COLORMAP_JET).flatten().tolist())
-                pt1, pt2 = points_from_line(rho, theta, scaling_factor)
-                cv2.line(cdst, pt1, pt2, color, 3, cv2.LINE_AA)
+                if args.debug:
+                  assert 0 <= category <= num_bins
+
+                  # Plot each category with a different color      
+                  color = tuple(cv2.applyColorMap(np.uint8([[int(255 * category / num_bins)]]), cv2.COLORMAP_JET).flatten().tolist())
+                  pt1, pt2 = points_from_line(rho, theta, scaling_factor)
+                  cv2.line(cdst, pt1, pt2, color, 3, cv2.LINE_AA)
         if args.debug:
           window_name = "Filtered lines (by slope)"
           cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -367,6 +374,7 @@ if __name__ == "__main__":
     indices = np.where(labels == most_frequent_label) 
     img_2 = np.copy(image)
 
+    # FIXME A set is more appropiate than a list for this case.
     already_used_categories = []
     for p in pair_of_lines[indices]:
         cat_1 = p.line1.category
