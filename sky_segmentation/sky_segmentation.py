@@ -118,7 +118,7 @@ def KMeansSky(image: cv2.Mat, **kwargs) -> cv2.Mat:
     imkclus = imkclus.reshape((imblur.shape))
     imkclusg = cv2.cvtColor(imkclus.astype(np.uint8), cv2.COLOR_BGR2GRAY)
     hclabs, hcintens = horizon_cluster(imkclusg)
-    return hcintens
+    return imkclusg, hcintens
 
 
 def IntensitySky(image: cv2.Mat, **kwargs) -> cv2.Mat:
@@ -138,7 +138,7 @@ def IntensitySky(image: cv2.Mat, **kwargs) -> cv2.Mat:
     imquant = (imintens // q)
     cgrval, cglab, cgstats, _ = connectedGrayscaleComponentsWithStats(imquant)
     hclabs, hcintens = horizon_cluster(imquant)
-    return hcintens
+    return imquant, hcintens
 
 
 if __name__ == '__main__':
@@ -153,8 +153,8 @@ if __name__ == '__main__':
     image = cv2.imread(args.image)
     
     # process image for sky detection
-    intensity_sky = IntensitySky(image)
-    kmeans_sky = KMeansSky(image)
+    _, intensity_sky = IntensitySky(image)
+    _, kmeans_sky = KMeansSky(image)
 
     # convert to format opencv can display
     intensity_sky = intensity_sky.astype(np.uint8) * 255
