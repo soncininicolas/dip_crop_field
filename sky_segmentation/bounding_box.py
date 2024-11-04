@@ -1,13 +1,12 @@
 import cv2
 import numpy as np
 
-def merge_bounding_boxes(stats, selected_labels):
+def merge_bounding_boxes(elements):
     """
     Merges bounding boxes for selected components based on their labels.
 
     Arguments:
-        stats (np.ndarray): the output from cv2.connectedComponentsWithStats.
-        selected_labels (List[int]): list of labels for components to merge.
+        elements (List[Tuple(...)]): elements to join with (label, x, y, w, h)
 
     Returns:
         merged_box (
@@ -25,11 +24,8 @@ def merge_bounding_boxes(stats, selected_labels):
     max_y = -np.inf
     
     # Iterate over selected labels to find the min and max x, y coordinates
-    for lab in selected_labels:
-        x = stats[lab, cv2.CC_STAT_LEFT]
-        y = stats[lab, cv2.CC_STAT_TOP]
-        w = stats[lab, cv2.CC_STAT_WIDTH]
-        h = stats[lab, cv2.CC_STAT_HEIGHT]
+    for elem in elements:
+        _, x, y, w, h = elem
         
         min_x = min(min_x, x)
         min_y = min(min_y, y)
