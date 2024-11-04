@@ -98,10 +98,14 @@ def horizon_cluster(clusters: cv2.Mat) -> Tuple[List[int], cv2.Mat]:
         # check if it spans the full image width
         if jlabels.cumsum(axis=0, dtype=bool)[-1].all():
             break
+
+    # Calculate the sky's compound bounding box
+    sky_bbox = bbox.merge_bounding_boxes(sky_elements)
+    # if the area is bigger than half the image, return nothing
+    if (sky_bbox[2] * sky_bbox[3] > clusters.shape[0] * clusters.shape[1] * 0.5):
+        return [], np.zeros((clabels.shape[0], clabels.shape[1]), dtype=bool)
     
     # Add additional labels if they contribute to the sky
-    # calculate the sky's compound bounding box
-    sky_bbox = bbox.merge_bounding_boxes(sky_elements)
     other_rvals = []
     for ol, ox, oy, ow, oh in elements:
         if ol in rvals:
