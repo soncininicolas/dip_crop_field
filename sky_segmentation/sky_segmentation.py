@@ -10,6 +10,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from typing import List, Any, Tuple
+import bounding_box as bbox 
 
 
 # Connected intensity components with stats
@@ -38,7 +39,7 @@ def connectedGrayscaleComponentsWithStats(image: cv2.Mat) -> \
     labels = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint32)
     stats = np.array([[0,0,0,0,0]])
     centroids = np.array([[0,0]])
-    for i in range(256):  # FIXME: range can be greater than this?!
+    for i in range(image.max()+1):
         # binarize image
         bimg = (image == i).astype(np.uint8)
         # compute components with stats
@@ -76,22 +77,53 @@ def horizon_cluster(clusters: cv2.Mat) -> Tuple[List[int], cv2.Mat]:
     # to bottom most and we start joining them in this order until we get
     # a super-cluster that spans all the width of the image
     elements = [(lab, cstats[lab, cv2.CC_STAT_TOP]) for lab in range(crval)]
-    elements.sort(key=lambda e: e[1])  # ascending given that x starts as 0 at the top
-    jlabels = np.zeros((clabels.shape[0], clabels.shape[1]), dtype=bool)  # initial joined clusters is empty
+    elements.sort(key=lambda e: e[1])  # ascending, y starts as 0 at the top
+    
+    # Join labels until they span the full width
+    jlabels = np.zeros((clabels.shape[0], clabels.shape[1]), dtype=bool)
     rvals = []
     for lab,_ in elements:
         rvals.append(lab)
-        jlabels = jlabels | (clabels == lab)
+        jlabels[clabels == lab] = True
         # check if it spans the full image width
         if jlabels.cumsum(axis=0, dtype=bool)[-1].all():
-            # FIXME: this joins unconnected elements and small elements too
-            # keep joining all elements that are above current
-            alsojoin = [l for l,_ in elements if l not in rvals \
-             and cstats[l, cv2.CC_STAT_TOP] + cstats[l, cv2.CC_STAT_HEIGHT]\
-                  < cstats[lab, cv2.CC_STAT_TOP] + cstats[lab, cv2.CC_STAT_HEIGHT]]
-            for l in alsojoin:
-                jlabels = jlabels | (clabels == l)
             break
+    
+    # Add additional labels if they contribute to the sky
+    # calculate the sky's compound bounding box
+    sky_bbox = bbox.merge_bounding_boxes(cstats, rvals)
+    other_rvals = []
+    for other_lab,_ in elements:
+        if other_lab in rvals:
+            continue  # skip
+
+        other_bbox = (
+            cstats[other_lab, cv2.CC_STAT_LEFT],
+            cstats[other_lab, cv2.CC_STAT_TOP],
+            cstats[other_lab, cv2.CC_STAT_WIDTH],
+            cstats[other_lab, cv2.CC_STAT_HEIGHT])
+
+        # if bbox.intersects_with_tolerance(sky_bbox, other_bbox):
+        #     other_rvals.append(other_lab)
+        #     jlabels[clabels == other_lab] = True
+        #     break
+
+        if bbox.is_contained(sky_bbox, other_bbox, 0.3):
+            other_rvals.append(other_lab)
+            jlabels[clabels == other_lab] = True
+            break
+
+        # # check if vertically close to any sky component
+        # for sky_lab in rvals:
+        #     if (cstats[other_lab, cv2.CC_STAT_TOP] + 
+        #             cstats[other_lab, cv2.CC_STAT_HEIGHT] <= 
+        #             cstats[sky_lab, cv2.CC_STAT_TOP] + 
+        #             cstats[sky_lab, cv2.CC_STAT_HEIGHT]):
+        #         other_rvals.append(other_lab)
+        #         jlabels[clabels == other_lab] = True
+        #         break
+    rvals = rvals + other_rvals  # so we dont mess up the rvals iteration
+
     return rvals, jlabels
 
 
